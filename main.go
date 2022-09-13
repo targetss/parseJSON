@@ -1,3 +1,4 @@
+// Rick And Morty API
 package main
 
 import (
@@ -11,14 +12,41 @@ import (
 	"time"
 )
 
-type js struct {
-	API         string `json:"API"`
-	Description string `json:"Description"`
-	Auth        string `json:"Auth"`
-	HTTPS       bool   `json:"HTTPS"`
-	Cors        string `json:"Cors"`
-	Link        string `json:"Link"`
-	Category    string `json:"Category"`
+type InfoData struct {
+	Count int    `json:"count"`
+	Pages int    `json:"pages"`
+	Next  string `json:"next"`
+	Prev  string `json:"prev"`
+}
+
+type Origin struct {
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}
+
+type Location struct {
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}
+
+type JsonRaM struct {
+	Info   InfoData     `json:"info"`
+	Result []PersonInfo `json:"result"`
+}
+
+type PersonInfo struct {
+	ID       int      `json:"id"`
+	Name     string   `json:"name"`
+	Status   string   `json:"status"`
+	Species  string   `json:"species"`
+	Type     string   `json:"type"`
+	Gender   string   `json:"gender"`
+	Origin   Origin   `json:"origin"`
+	Location Location `json:"location"`
+	Image    string   `json:"image"`
+	Episode  []string `json:"episode"`
+	Url      string   `json:"url"`
+	Created  string   `json:"created"`
 }
 
 const times string = "2006-01-02"
@@ -27,7 +55,8 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var (
-		result = new([]js)
+		url    string = "https://rickandmortyapi.com/api/character/?"
+		result        = new([]js)
 		newstr []byte
 		search string
 		Year   int
@@ -48,7 +77,7 @@ func main() {
 	date2, _ := time.Parse(times, date1)
 	fmt.Println(date2)
 
-	resp, err := http.Get("https://api.publicapis.org/entries")
+	resp, err := http.Get("https://rickandmortyapi.com/api/character")
 	if err != nil {
 		fmt.Println("No response from request")
 	}
@@ -88,6 +117,7 @@ Loopb:
 			uniquedata = append(uniquedata, val.Category)
 		}
 		for i := 0; i < len(uniquedata); i++ {
+			fmt.Println(val.Category, uniquedata[i])
 			if val.Category == uniquedata[i] {
 				continue Loopb
 			}
