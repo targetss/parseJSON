@@ -3,12 +3,14 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
+	"strings"
+
+	//"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
-	"strings"
+	//"strings"
 	"time"
 )
 
@@ -30,8 +32,8 @@ type Location struct {
 }
 
 type JsonRaM struct {
-	Info   InfoData     `json:"info"`
-	Result []PersonInfo `json:"result"`
+	Info    InfoData     `json:"info"`
+	Results []PersonInfo `json:"results"`
 }
 
 type PersonInfo struct {
@@ -55,80 +57,162 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var (
-		url    string = "https://rickandmortyapi.com/api/character/?"
-		result        = new([]js)
-		newstr []byte
-		search string
-		Year   int
-		Month  int
-		Day    int
+		url       string     = "https://rickandmortyapi.com/api/character/?page="
+		result    *[]JsonRaM = new([]JsonRaM)
+		search    string
+		uniquearr []string
+		//newstr []byte
+		//search string
+		//Year   int
+		//Month  int
+		//Day    int
 	)
-	fmt.Println("Введите дату 'От'\nВведите год:")
-	fmt.Scan(&Year)
-	fmt.Println("Введите месяц:")
-	fmt.Scan(&Month)
-	fmt.Println("Введите день:")
-	fmt.Scan(&Day)
 
-	if Month > 9 && Month < 13 {
+	RequestData(url, result)
 
+	for {
+		fmt.Println("Введите поле для сортировки:")
+		fmt.Scan(&search)
+
+		uniquearr = UniqueData(result, strings.ToLower(search))
+
+		for ind, val := range uniquearr {
+			fmt.Printf("Index:%v\tValue:%v\n", ind, val)
+		}
+		fmt.Println("========================================================================================")
 	}
-	date1 := fmt.Sprintf("%d-0%d-0%d", Year, Month, Day)
-	date2, _ := time.Parse(times, date1)
-	fmt.Println(date2)
 
-	resp, err := http.Get("https://rickandmortyapi.com/api/character")
+	//fmt.Println(*result)
+	/*
+		fmt.Println("Введите дату 'От'\nВведите год:")
+		fmt.Scan(&Year)
+		fmt.Println("Введите месяц:")
+		fmt.Scan(&Month)
+		fmt.Println("Введите день:")
+		fmt.Scan(&Day)
+
+		if Month > 9 && Month < 13 {
+
+		}
+		date1 := fmt.Sprintf("%d-0%d-0%d", Year, Month, Day)
+		date2, _ := time.Parse(times, date1)
+		fmt.Println(date2)
+	*/
+
+	//fmt.Println("Введите слово для поиска:")
+	//fmt.Scan(&search)
+
+	//err = PrintDataCategory(result, search)
+	//if err != nil {
+	//	fmt.Println(err)
+	//}
+
+	//UniqueCategoryData(result)
+
+}
+
+func RequestData(url string, datajson *[]JsonRaM) {
+	var (
+		rr JsonRaM
+	)
+	respT, err := http.Get(fmt.Sprintf("%v1", url))
 	if err != nil {
 		fmt.Println("No response from request")
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body) // возвращает []byte
+	defer respT.Body.Close()
+	body, err := io.ReadAll(respT.Body) // возвращает []byte
 
 	//fmt.Println(strings.Index(string(body), "[")) // находим индекс символа ""
 
-	newstr = body[strings.Index(string(body), "[") : strings.Index(string(body), "]")+1] //для массива нужно включать в строку "[" и "]"
+	//newstr = body[strings.Index(string(body), "[") : strings.Index(string(body), "]")+1] //для массива нужно включать в строку "[" и "]"
 
-	if err := json.Unmarshal(newstr, result); err != nil { // Parse []byte to the go struct pointer
-		fmt.Println("Can not unmarshal JSON")
-	}
+	//fmt.Println(string(body))
 
-	fmt.Println("Введите слово для поиска:")
-	fmt.Scan(&search)
-
-	err = PrintDataCategory(result, search)
-	if err != nil {
+	if err := json.Unmarshal(body, &rr); err != nil { // Parse []byte to the go struct pointer
 		fmt.Println(err)
 	}
 
-	UniqueCategoryData(result)
+	*datajson = append((*datajson), rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
 
+	fmt.Println((*datajson)[0].Info.Pages) //сначала разыменовываем указатель, а после обращаемся по индексу
+
+	if (*datajson)[0].Info.Pages > 1 {
+		for i := 2; i <= (*datajson)[0].Info.Pages; i++ {
+			var (
+				rr JsonRaM
+			)
+			response, err := http.Get(fmt.Sprintf("%v%d", url, i))
+			if err != nil {
+				return
+			}
+			defer response.Body.Close()
+
+			body, err := io.ReadAll(response.Body)
+			if err := json.Unmarshal(body, &rr); err != nil {
+				fmt.Println(err)
+			}
+			(*datajson) = append((*datajson), rr)
+		}
+	}
 }
 
-func UniqueCategoryData(data *[]js) {
+func UniqueData(data *[]JsonRaM, sort string) []string {
+	fmt.Println(sort)
 	fmt.Println("UniqueCategoryData")
 	var (
+		arrdata    = make([]string, 0)
 		uniquedata = make([]string, 0)
+		//nametable  = make([]string, 0)
 		//count      int
 	)
-	fmt.Println("len:", len(uniquedata))
-Loopb:
-	for ind, val := range *data {
-		if ind == 0 {
-			uniquedata = append(uniquedata, val.Category)
-		}
-		for i := 0; i < len(uniquedata); i++ {
-			fmt.Println(val.Category, uniquedata[i])
-			if val.Category == uniquedata[i] {
-				continue Loopb
+	//fmt.Println((*data)[0].Results[0].Name)
+
+	for _, vl := range (*data)[0].Results {
+		//nametable = append(nametable, string(vl)) //дописать
+	}
+
+	for _, val := range *data {
+		for _, valn := range val.Results {
+			switch sort {
+			case "name":
+				arrdata = append(arrdata, valn.Name)
+			case "status":
+				arrdata = append(arrdata, valn.Status)
+			case "species":
+				arrdata = append(arrdata, valn.Species)
+			case "type":
+				arrdata = append(arrdata, valn.Type)
+			case "gender":
+				arrdata = append(arrdata, valn.Gender)
+			case "origin":
+				arrdata = append(arrdata, valn.Origin.Name)
+			case "location":
+				arrdata = append(arrdata, valn.Location.Name)
+			default:
+				break
 			}
-			uniquedata = append(uniquedata, val.Category)
 		}
 	}
-	for _, val := range uniquedata {
-		fmt.Println(val)
+
+	uniquedata = append(uniquedata, arrdata[0])
+Loop:
+	for ind, val := range arrdata {
+		if ind == 0 {
+			continue Loop
+		}
+		for ind2, val2 := range uniquedata {
+			if val == val2 {
+				continue Loop
+			}
+			if ind2+1 == len(uniquedata) && val != val2 {
+				uniquedata = append(uniquedata, val)
+			}
+		}
 	}
+	return uniquedata
 }
 
+/*
 func CountCategoryData(data *[]js, strSort string) int {
 	var (
 		count int
@@ -167,3 +251,5 @@ func PrintDataCategory(str *[]js, strSearch string) error {
 		return err
 	}
 }
+
+*/
