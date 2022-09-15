@@ -3,14 +3,17 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
-
-	//"errors"
 	"fmt"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
 	"net/http"
-	//"strings"
+	"strings"
 	"time"
 )
 
@@ -57,10 +60,10 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var (
-		url       string     = "https://rickandmortyapi.com/api/character/?page="
-		result    *[]JsonRaM = new([]JsonRaM)
-		search    string
-		uniquearr []string
+		url    string     = "https://rickandmortyapi.com/api/character/?page="
+		result *[]JsonRaM = new([]JsonRaM)
+		//search    string
+		//uniquearr []string
 		//newstr []byte
 		//search string
 		//Year   int
@@ -70,45 +73,70 @@ func main() {
 
 	RequestData(url, result)
 
-	for {
-		fmt.Println("Введите поле для сортировки:")
-		fmt.Scan(&search)
-
-		uniquearr = UniqueData(result, strings.ToLower(search))
-
-		for ind, val := range uniquearr {
-			fmt.Printf("Index:%v\tValue:%v\n", ind, val)
-		}
-		fmt.Println("========================================================================================")
+	uniqueelemstruct := struct { //анонимная структура с уникальными полями, для полей выбора сортировки
+		//ID []int
+		Name         []string
+		Status       []string
+		Species      []string
+		Type         []string
+		Gender       []string
+		OriginName   []string
+		LocationName []string
+	}{
+		Name:         UniqueData(result, "Name"),
+		Status:       UniqueData(result, "Status"),
+		Species:      UniqueData(result, "Species"),
+		Type:         UniqueData(result, "Type"),
+		Gender:       UniqueData(result, "Gender"),
+		OriginName:   UniqueData(result, "Origin"),
+		LocationName: UniqueData(result, "Location"),
 	}
 
-	//fmt.Println(*result)
+	a := app.New()
+	w := a.NewWindow("Rick And Morty")
+	w.Resize(fyne.NewSize(1000, 900))
+
+	listStatus := widget.NewList(
+		func() int {
+			return len(uniqueelemstruct.Status)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("template")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(uniqueelemstruct.Status[i])
+		})
+
+	listSpecies := widget.NewList(
+		func() int {
+			return len(uniqueelemstruct.Species)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("template")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(uniqueelemstruct.Species[i])
+		})
+
+	res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
+	img := canvas.NewImageFromResource(res)
+	l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
+	w.SetContent(l)
+	w.ShowAndRun()
+
 	/*
-		fmt.Println("Введите дату 'От'\nВведите год:")
-		fmt.Scan(&Year)
-		fmt.Println("Введите месяц:")
-		fmt.Scan(&Month)
-		fmt.Println("Введите день:")
-		fmt.Scan(&Day)
+		for {
+			fmt.Println("Введите поле для сортировки:")
+			fmt.Scan(&search)
 
-		if Month > 9 && Month < 13 {
+			uniquearr = UniqueData(result, strings.ToLower(search))
 
+			for ind, val := range uniquearr {
+				fmt.Printf("Index:%v\tValue:%v\n", ind, val)
+			}
+			fmt.Println("========================================================================================")
 		}
-		date1 := fmt.Sprintf("%d-0%d-0%d", Year, Month, Day)
-		date2, _ := time.Parse(times, date1)
-		fmt.Println(date2)
 	*/
-
-	//fmt.Println("Введите слово для поиска:")
-	//fmt.Scan(&search)
-
-	//err = PrintDataCategory(result, search)
-	//if err != nil {
-	//	fmt.Println(err)
-	//}
-
-	//UniqueCategoryData(result)
-
 }
 
 func RequestData(url string, datajson *[]JsonRaM) {
@@ -117,7 +145,7 @@ func RequestData(url string, datajson *[]JsonRaM) {
 	)
 	respT, err := http.Get(fmt.Sprintf("%v1", url))
 	if err != nil {
-		fmt.Println("No response from request")
+		fmt.Errorf("Произошла ошибка: %v", err)
 	}
 	defer respT.Body.Close()
 	body, err := io.ReadAll(respT.Body) // возвращает []byte
@@ -157,7 +185,8 @@ func RequestData(url string, datajson *[]JsonRaM) {
 }
 
 func UniqueData(data *[]JsonRaM, sort string) []string {
-	fmt.Println(sort)
+	//fmt.Println(sort)
+	sort = strings.ToLower(sort)
 	fmt.Println("UniqueCategoryData")
 	var (
 		arrdata    = make([]string, 0)
@@ -169,6 +198,7 @@ func UniqueData(data *[]JsonRaM, sort string) []string {
 
 	for _, vl := range (*data)[0].Results {
 		//nametable = append(nametable, string(vl)) //дописать
+		fmt.Sprint(vl)
 	}
 
 	for _, val := range *data {
@@ -211,45 +241,3 @@ Loop:
 	}
 	return uniquedata
 }
-
-/*
-func CountCategoryData(data *[]js, strSort string) int {
-	var (
-		count int
-	)
-
-	for _, val := range *data {
-		if val.Category == strSort {
-			count++
-		}
-	}
-	return count
-}
-
-func PrintDataCategory(str *[]js, strSearch string) error {
-	var (
-		count       uint16 = uint16(len(*str))
-		count_range uint16
-	)
-
-	err := errors.New("Data is not found!")
-
-	if count != 0 {
-		fmt.Printf("%15s %100s\n", "Type", "Link")
-		for _, val := range *str {
-			switch searchstr := strings.Contains(val.Category, strSearch); searchstr {
-			case true:
-				fmt.Printf("%s %100s\n", val.API, val.Link)
-			case false:
-				count_range++
-				break
-			}
-		}
-
-		return nil
-	} else {
-		return err
-	}
-}
-
-*/
