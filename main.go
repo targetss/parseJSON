@@ -6,14 +6,8 @@ import (
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-<<<<<<< HEAD
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
-=======
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
->>>>>>> origin/master
 	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
@@ -67,10 +61,7 @@ func main() {
 	var (
 		url    string     = "https://rickandmortyapi.com/api/character/?page="
 		result *[]JsonRaM = new([]JsonRaM)
-<<<<<<< HEAD
 		i      int        = 1
-=======
->>>>>>> origin/master
 		//search    string
 		//uniquearr []string
 		//newstr []byte
@@ -100,7 +91,6 @@ func main() {
 		OriginName:   UniqueData(result, "Origin"),
 		LocationName: UniqueData(result, "Location"),
 	}
-<<<<<<< HEAD
 
 	_ = uniqueelemstruct
 
@@ -162,54 +152,6 @@ func main() {
 	w.SetContent(menu)
 	w.ShowAndRun()
 
-=======
-
-	a := app.New()
-	w := a.NewWindow("Rick And Morty")
-	w.Resize(fyne.NewSize(1000, 900))
-
-	listStatus := widget.NewList(
-		func() int {
-			return len(uniqueelemstruct.Status)
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("template")
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(uniqueelemstruct.Status[i])
-		})
-
-	listSpecies := widget.NewList(
-		func() int {
-			return len(uniqueelemstruct.Species)
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("template")
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(uniqueelemstruct.Species[i])
-		})
-
-	res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
-	img := canvas.NewImageFromResource(res)
-	l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
-	w.SetContent(l)
-	w.ShowAndRun()
-
-	/*
-		for {
-			fmt.Println("Введите поле для сортировки:")
-			fmt.Scan(&search)
-
-			uniquearr = UniqueData(result, strings.ToLower(search))
-
-			for ind, val := range uniquearr {
-				fmt.Printf("Index:%v\tValue:%v\n", ind, val)
-			}
-			fmt.Println("========================================================================================")
-		}
-	*/
->>>>>>> origin/master
 }
 
 func RequestData(url string, datajson *[]JsonRaM) {
