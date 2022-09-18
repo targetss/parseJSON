@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
@@ -53,6 +54,19 @@ type PersonInfo struct {
 	Created  string   `json:"created"`
 }
 
+type PersonUni struct {
+	ID       int
+	Name     string
+	Status   string
+	Species  string
+	Type     string
+	Gender   string
+	Origin   string
+	Location string
+	Image    string
+	Created  string
+}
+
 const times string = "2006-01-02"
 
 func main() {
@@ -61,14 +75,6 @@ func main() {
 	var (
 		url    string     = "https://rickandmortyapi.com/api/character/?page="
 		result *[]JsonRaM = new([]JsonRaM)
-		i      int        = 1
-		//search    string
-		//uniquearr []string
-		//newstr []byte
-		//search string
-		//Year   int
-		//Month  int
-		//Day    int
 	)
 
 	RequestData(url, result)
@@ -94,6 +100,8 @@ func main() {
 
 	_ = uniqueelemstruct
 
+	test := PersonID(result)
+
 	a := app.New()
 	w := a.NewWindow("Rick And Morty")
 	w.Resize(fyne.NewSize(1000, 900))
@@ -101,55 +109,70 @@ func main() {
 	file_item1 := fyne.NewMenuItem("Обновить", func() {
 		RequestData(url, result)
 	})
-
 	menu1 := fyne.NewMenu("Файл", file_item1)
-
 	main_menu := fyne.NewMainMenu(menu1)
 	w.SetMainMenu(main_menu)
 
-	str_test := binding.NewString()
-	str_test.Set("Test Name")
-	txt := widget.NewLabelWithData(str_test)
+	// =============== Поле карточки персонажа ================//
+	image := canvas.NewImageFromResource(theme.FyneLogo())
 
-	btn_next := widget.NewButton("Далее", func() {
-		i *= 2
-		str_test.Set(string(i))
-	})
+	labelNameField := widget.NewLabel("Имя:")
+	labelName := widget.NewLabel("Unknown")
 
-	menu := container.NewVBox(txt, btn_next)
+	labelStatusField := widget.NewLabel("Статус")
+	labelStatus := widget.NewLabel("Unknown")
 
-	/*card_form := widget.NewForm(
-		widget.NewFormItem("Имя: ", canvas.NewText(uniqueelemstruct.Name[1], color.Black)),
-		widget.NewFormItem("Статус: ", canvas.NewText(uniqueelemstruct.Status[0], color.Black)),
-	)*/
+	labelSpeciesField := widget.NewLabel("Разновидность:")
+	labelSpecies := widget.NewLabel("Unknown")
+
+	labelTypeField := widget.NewLabel("Тип:")
+	labelType := widget.NewLabel("Unknown")
+
+	labelGenderField := widget.NewLabel("Пол:")
+	labelGender := widget.NewLabel("Unknown")
+
+	tableCard := container.NewVBox(image, container.NewHBox(labelNameField, labelName), container.NewHBox(labelStatusField, labelStatus),
+		container.NewHBox(labelSpeciesField, labelSpecies), container.NewHBox(labelTypeField, labelType), container.NewHBox(labelGenderField, labelGender))
+	// =============== Поле карточки персонажа ================//
+
+	listID := widget.NewList(
+		func() int {
+			return len(test)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(test[i].Name)
+		})
+
+	listID.OnSelected = func(id widget.ListItemID) {
+		rt, _ := fyne.LoadResourceFromURLString(test[id].Image)
+		// тут не сохраняется изображение, доделать!!!
+		labelName.SetText(test[id].Name)
+		labelStatus.SetText(test[id].Status)
+		labelSpecies.SetText(test[id].Species)
+		labelType.SetText(test[id].Type)
+		labelGender.SetText(test[id].Gender)
+	}
 
 	/*
-		listStatus := widget.NewList(
-			func() int {
-				return len(uniqueelemstruct.Status)
-			},
-			func() fyne.CanvasObject {
-				return widget.NewLabel("template")
-			},
-			func(i widget.ListItemID, o fyne.CanvasObject) {
-				o.(*widget.Label).SetText(uniqueelemstruct.Status[i])
-			})
+		name := binding.NewString()
+		name.Set((*result)[i].Results[i].Name)
+		name_txt := widget.NewLabelWithData(name)
 
-		listSpecies := widget.NewList(
-			func() int {
-				return len(uniqueelemstruct.Species)
-			},
-			func() fyne.CanvasObject {
-				return widget.NewLabel("template")
-			},
-			func(i widget.ListItemID, o fyne.CanvasObject) {
-				o.(*widget.Label).SetText(uniqueelemstruct.Species[i])
-			})
+		btn_next := widget.NewButton("Далее", func() {
+			i++
+			name.Set((*result)[i].Results[i].Name)
+		})
+
+		menu := container.NewVBox(name_txt, btn_next)
 	*/
+
 	//res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
 	//img := canvas.NewImageFromResource(res)
 	//l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
-	w.SetContent(menu)
+	w.SetContent(container.NewHSplit(listID, tableCard))
 	w.ShowAndRun()
 
 }
@@ -255,4 +278,29 @@ Loop:
 		}
 	}
 	return uniquedata
+}
+
+func PersonID(data *[]JsonRaM) []PersonUni {
+	var (
+		temp = make([]PersonUni, 0)
+	)
+
+	for _, val := range *data {
+		for _, val2 := range val.Results {
+			var dt PersonUni = PersonUni{
+				ID:       val2.ID,
+				Name:     val2.Name,
+				Status:   val2.Status,
+				Species:  val2.Species,
+				Type:     val2.Type,
+				Gender:   val2.Gender,
+				Origin:   val2.Origin.Name,
+				Location: val2.Location.Name,
+				Image:    val2.Image,
+				Created:  val2.Created,
+			}
+			temp = append(temp, dt)
+		}
+	}
+	return temp
 }
