@@ -8,11 +8,12 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -114,7 +115,8 @@ func main() {
 	w.SetMainMenu(main_menu)
 
 	// =============== Поле карточки персонажа ================//
-	image := canvas.NewImageFromResource(theme.FyneLogo())
+	image := canvas.NewImageFromFile("./img/1.jpg")
+	image.Resize(fyne.Size{Height: 100, Width: 100})
 
 	labelNameField := widget.NewLabel("Имя:")
 	labelName := widget.NewLabel("Unknown")
@@ -131,7 +133,7 @@ func main() {
 	labelGenderField := widget.NewLabel("Пол:")
 	labelGender := widget.NewLabel("Unknown")
 
-	tableCard := container.NewVBox(image, container.NewHBox(labelNameField, labelName), container.NewHBox(labelStatusField, labelStatus),
+	tableCard := container.NewVBox(container.NewHBox(labelNameField, labelName), container.NewHBox(labelStatusField, labelStatus),
 		container.NewHBox(labelSpeciesField, labelSpecies), container.NewHBox(labelTypeField, labelType), container.NewHBox(labelGenderField, labelGender))
 	// =============== Поле карточки персонажа ================//
 
@@ -147,8 +149,7 @@ func main() {
 		})
 
 	listID.OnSelected = func(id widget.ListItemID) {
-		rt, _ := fyne.LoadResourceFromURLString(test[id].Image)
-		// тут не сохраняется изображение, доделать!!!
+		image = canvas.NewImageFromFile(fmt.Sprintf("./img/%v.jpg", id))
 		labelName.SetText(test[id].Name)
 		labelStatus.SetText(test[id].Status)
 		labelSpecies.SetText(test[id].Species)
@@ -156,23 +157,13 @@ func main() {
 		labelGender.SetText(test[id].Gender)
 	}
 
-	/*
-		name := binding.NewString()
-		name.Set((*result)[i].Results[i].Name)
-		name_txt := widget.NewLabelWithData(name)
-
-		btn_next := widget.NewButton("Далее", func() {
-			i++
-			name.Set((*result)[i].Results[i].Name)
-		})
-
-		menu := container.NewVBox(name_txt, btn_next)
-	*/
+	rr := container.New(layout.NewMaxLayout(), image, tableCard, listID)
 
 	//res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
 	//img := canvas.NewImageFromResource(res)
 	//l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
-	w.SetContent(container.NewHSplit(listID, tableCard))
+	w.SetContent(rr)
+	//w.SetContent(container.NewHSplit(listID, tableCard))
 	w.ShowAndRun()
 
 }
@@ -200,6 +191,13 @@ func RequestData(url string, datajson *[]JsonRaM) {
 
 	*datajson = append((*datajson), rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
 
+	for _, val := range *datajson {
+		for _, val2 := range val.Results {
+			fmt.Println(val2.ID, val2.Image)
+			go DownloadImage(val2.ID, val2.Image)
+		}
+	}
+
 	fmt.Println((*datajson)[0].Info.Pages) //сначала разыменовываем указатель, а после обращаемся по индексу
 
 	if (*datajson)[0].Info.Pages > 1 {
@@ -218,8 +216,28 @@ func RequestData(url string, datajson *[]JsonRaM) {
 				fmt.Println(err)
 			}
 			(*datajson) = append((*datajson), rr)
+
+			for _, val2 := range (*datajson)[i-1].Results {
+				//fmt.Println(val2.ID, val2.Image)
+				go DownloadImage(val2.ID, val2.Image)
+			}
 		}
 	}
+}
+
+func DownloadImage(id int, url string) {
+	fmt.Println(id, " | ", url)
+	resp, _ := http.Get(url)
+
+	defer resp.Body.Close()
+
+	filecrt, err := os.Create(fmt.Sprintf("./img/%v.jpg", id))
+	if err != nil {
+		fmt.Println("Ошибка создания файла!")
+	}
+	io.Copy(filecrt, resp.Body)
+	defer filecrt.Close()
+	fmt.Println("Завершение создания файла")
 }
 
 func UniqueData(data *[]JsonRaM, sort string) []string {
