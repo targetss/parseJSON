@@ -8,7 +8,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
@@ -116,7 +115,7 @@ func main() {
 
 	// =============== Поле карточки персонажа ================//
 	image := canvas.NewImageFromFile("./img/1.jpg")
-	image.Resize(fyne.Size{Height: 100, Width: 100})
+	image.Resize(fyne.Size{Height: 250, Width: 250})
 
 	labelNameField := widget.NewLabel("Имя:")
 	labelName := widget.NewLabel("Unknown")
@@ -148,22 +147,31 @@ func main() {
 			o.(*widget.Label).SetText(test[i].Name)
 		})
 
+	var contN *fyne.Container
+
+	rr := container.NewWithoutLayout(image)
+
+	rr2 := container.NewVBox(rr, tableCard)
+
 	listID.OnSelected = func(id widget.ListItemID) {
-		image = canvas.NewImageFromFile(fmt.Sprintf("./img/%v.jpg", id))
+		img := canvas.NewImageFromFile(fmt.Sprintf("./img/%v.jpg", id+1))
+		img.Resize(fyne.Size{Height: 250, Width: 250})
+		ttt := container.NewWithoutLayout(img)
+		contN = container.NewVBox(ttt, tableCard)
+
 		labelName.SetText(test[id].Name)
 		labelStatus.SetText(test[id].Status)
 		labelSpecies.SetText(test[id].Species)
 		labelType.SetText(test[id].Type)
 		labelGender.SetText(test[id].Gender)
+		w.SetContent(container.NewHSplit(listID, contN))
+		w.Show()
 	}
-
-	rr := container.New(layout.NewMaxLayout(), image, tableCard, listID)
 
 	//res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
 	//img := canvas.NewImageFromResource(res)
 	//l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
-	w.SetContent(rr)
-	//w.SetContent(container.NewHSplit(listID, tableCard))
+	w.SetContent(container.NewHSplit(listID, rr2))
 	w.ShowAndRun()
 
 }
