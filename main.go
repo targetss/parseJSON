@@ -8,11 +8,11 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -68,12 +68,38 @@ type PersonUni struct {
 }
 
 const times string = "2006-01-02"
+const url string = "https://rickandmortyapi.com/api/character/?page="
+
+type CardLayout struct {
+}
+
+func (d *CardLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	weight, height := float32(0), float32(0)
+	for _, o := range objects {
+		childSize := o.MinSize()
+		weight += childSize.Width
+		height += childSize.Height
+	}
+	return fyne.NewSize(weight, height)
+}
+
+func (d *CardLayout) Layout(objects []fyne.CanvasObject, containerSize fyne.Size) {
+	fmt.Printf("Type: %T", objects)
+	pos := fyne.NewPos(0, containerSize.Height-d.MinSize(objects).Height)
+	for _, o := range objects {
+		size := o.MinSize()
+		o.Resize(size)
+		o.Move(pos)
+
+		pos = pos.Add(fyne.NewPos(size.Width, size.Height))
+	}
+}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var (
-		url    string     = "https://rickandmortyapi.com/api/character/?page="
+		//url    string     = "https://rickandmortyapi.com/api/character/?page="
 		result *[]JsonRaM = new([]JsonRaM)
 	)
 
@@ -114,7 +140,8 @@ func main() {
 	w.SetMainMenu(main_menu)
 
 	// =============== Поле карточки персонажа ================//
-	image := canvas.NewImageFromResource(theme.FyneLogo())
+	image := canvas.NewImageFromFile("./img/1.jpeg")
+	image.Resize(fyne.Size{Height: 250, Width: 250})
 
 	labelNameField := widget.NewLabel("Имя:")
 	labelName := widget.NewLabel("Unknown")
@@ -131,7 +158,7 @@ func main() {
 	labelGenderField := widget.NewLabel("Пол:")
 	labelGender := widget.NewLabel("Unknown")
 
-	tableCard := container.NewVBox(image, container.NewHBox(labelNameField, labelName), container.NewHBox(labelStatusField, labelStatus),
+	tableCard := container.NewVBox(container.NewHBox(labelNameField, labelName), container.NewHBox(labelStatusField, labelStatus),
 		container.NewHBox(labelSpeciesField, labelSpecies), container.NewHBox(labelTypeField, labelType), container.NewHBox(labelGenderField, labelGender))
 	// =============== Поле карточки персонажа ================//
 
@@ -146,33 +173,35 @@ func main() {
 			o.(*widget.Label).SetText(test[i].Name)
 		})
 
+	var contN *fyne.Container
+
+	rr := container.NewWithoutLayout(image)
+
+	rr2 := container.NewVBox(rr, tableCard)
+
 	listID.OnSelected = func(id widget.ListItemID) {
-		rt, _ := fyne.LoadResourceFromURLString(test[id].Image)
-		// тут не сохраняется изображение, доделать!!!
+		img := canvas.NewImageFromFile(fmt.Sprintf("./img/%v.jpeg", id+1))
+		img.FillMode = canvas.ImageFillOriginal
+		//img.Resize(fyne.Size{Height: 250, Width: 250})
+		//img.Move(fyne.NewPos(250, 250))
+		//ttt := container.NewWithoutLayout(img)
+
+		//contN = container.New(&CardLayout{}, img, tableCard)
+		contN = container.NewVBox(img, tableCard)
+
 		labelName.SetText(test[id].Name)
 		labelStatus.SetText(test[id].Status)
 		labelSpecies.SetText(test[id].Species)
 		labelType.SetText(test[id].Type)
 		labelGender.SetText(test[id].Gender)
+		w.SetContent(container.NewHSplit(listID, contN))
+		w.Show()
 	}
-
-	/*
-		name := binding.NewString()
-		name.Set((*result)[i].Results[i].Name)
-		name_txt := widget.NewLabelWithData(name)
-
-		btn_next := widget.NewButton("Далее", func() {
-			i++
-			name.Set((*result)[i].Results[i].Name)
-		})
-
-		menu := container.NewVBox(name_txt, btn_next)
-	*/
 
 	//res, _ := fyne.LoadResourceFromURLString("https://rickandmortyapi.com/api/character/avatar/21.jpeg")
 	//img := canvas.NewImageFromResource(res)
 	//l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
-	w.SetContent(container.NewHSplit(listID, tableCard))
+	w.SetContent(container.NewHSplit(listID, rr2))
 	w.ShowAndRun()
 
 }
@@ -200,6 +229,13 @@ func RequestData(url string, datajson *[]JsonRaM) {
 
 	*datajson = append((*datajson), rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
 
+	for _, val := range *datajson {
+		for _, val2 := range val.Results {
+			fmt.Println(val2.ID, val2.Image)
+			go DownloadImage(val2.ID, val2.Image)
+		}
+	}
+
 	fmt.Println((*datajson)[0].Info.Pages) //сначала разыменовываем указатель, а после обращаемся по индексу
 
 	if (*datajson)[0].Info.Pages > 1 {
@@ -218,8 +254,34 @@ func RequestData(url string, datajson *[]JsonRaM) {
 				fmt.Println(err)
 			}
 			(*datajson) = append((*datajson), rr)
+
+			for _, val2 := range (*datajson)[i-1].Results {
+				//fmt.Println(val2.ID, val2.Image)
+				go DownloadImage(val2.ID, val2.Image)
+			}
 		}
 	}
+}
+
+func DownloadImage(id int, url string) {
+	_, err := os.Stat(fmt.Sprintf("./img/%v.jpeg", id))
+	if err == nil {
+		fmt.Println("File exists")
+		return
+	}
+
+	fmt.Println(id, " | ", url)
+	resp, _ := http.Get(url)
+
+	defer resp.Body.Close()
+
+	filecrt, err := os.Create(fmt.Sprintf("./img/%v.jpeg", id))
+	if err != nil {
+		fmt.Println("Ошибка создания файла!")
+	}
+	io.Copy(filecrt, resp.Body)
+	defer filecrt.Close()
+	fmt.Println("Завершение создания файла")
 }
 
 func UniqueData(data *[]JsonRaM, sort string) []string {
