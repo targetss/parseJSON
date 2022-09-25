@@ -185,7 +185,6 @@ func main() {
 		//img.Resize(fyne.Size{Height: 250, Width: 250})
 		//img.Move(fyne.NewPos(250, 250))
 		//ttt := container.NewWithoutLayout(img)
-
 		//contN = container.New(&CardLayout{}, img, tableCard)
 		contN = container.NewVBox(img, tableCard)
 
