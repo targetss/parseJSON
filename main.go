@@ -3,13 +3,16 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"image/jpeg"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -67,6 +70,117 @@ type PersonUni struct {
 	Created  string
 }
 
+type JsonRaMInfo []JsonRaM
+
+func (p *JsonRaMInfo) ImportData(url string) {
+	if len(*p) > 0 {
+		p = new(JsonRaMInfo)
+	}
+
+	var (
+		rr JsonRaM
+	)
+	respT, err := http.Get(fmt.Sprintf("%v1", url))
+	if err != nil {
+		fmt.Errorf("Произошла ошибка: %v", err)
+	}
+	defer respT.Body.Close()
+	body, err := io.ReadAll(respT.Body) // возвращает []byte
+
+	if err := json.Unmarshal(body, &rr); err != nil { // Parse []byte to the go struct pointer
+		fmt.Println(err)
+	}
+
+	*p = append(*p, rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
+
+	for _, val := range *p {
+		for _, val2 := range val.Results {
+			fmt.Println(val2.ID, val2.Image)
+			//go DownloadImage(val2.ID, val2.Image)
+			DownloadImage(val2.ID, val2.Image)
+		}
+	}
+
+	//fmt.Println((*p)[0].Info.Pages) //сначала разыменовываем указатель, а после обращаемся по индексу
+
+	if (*p)[0].Info.Pages > 1 {
+		for i := 2; i <= (*p)[0].Info.Pages; i++ {
+			var (
+				rr JsonRaM
+			)
+			response, err := http.Get(fmt.Sprintf("%v%d", url, i))
+			if err != nil {
+				return
+			}
+			defer response.Body.Close()
+
+			body, err := io.ReadAll(response.Body)
+			if err := json.Unmarshal(body, &rr); err != nil {
+				fmt.Println(err)
+			}
+			*p = append(*p, rr)
+
+			for _, val2 := range (*p)[i-1].Results {
+				//fmt.Println(val2.ID, val2.Image)
+				go DownloadImage(val2.ID, val2.Image)
+			}
+		}
+	}
+}
+
+func (p *JsonRaMInfo) AddDataFile(f *io.Writer) error {
+	//дописать
+	return nil
+}
+
+func (p *JsonRaMInfo) DownloadImageCharacter() {
+	cacheDir, _ := os.UserCacheDir()
+	os.Mkdir(fmt.Sprintf("%v/RaMImg", cacheDir), 0755)
+	for ind, _ := range *p {
+		for _, path2 := range (*p)[ind].Results {
+			/*if path2.ID%50 == 0 {
+				time.Sleep(500 * time.Millisecond)
+			}*/
+			go func(id int, url, path string) {
+				if _, errfile := os.Stat(fmt.Sprintf("%v/RaMImg/%v.jpeg", path, id)); !os.IsExist(errfile) {
+					log.Println("Файл существует")
+					return
+				}
+
+				//time.Sleep(100 * time.Millisecond) //срабатывает защита от ддос атак
+				fmt.Println("Gorutine go id:", path2.ID)
+				response, err := http.Get(url)
+				if err != nil {
+					log.Print(err)
+				}
+				if response.StatusCode == 429 {
+					time.Sleep(8 * time.Second)
+					response, _ := http.Get(url)
+					fileCreate, _ := os.Create(fmt.Sprintf("%v/RaMImg/%v.jpeg", path, id))
+					io.Copy(fileCreate, response.Body)
+					fileCreate.Close()
+					response.Body.Close()
+					return
+				}
+				fileCreate, err := os.Create(fmt.Sprintf("%v/RaMImg/%v.jpeg", path, id))
+				io.Copy(fileCreate, response.Body)
+
+				errEOF := errors.New("unexpected EOF")
+				loadImage, errdec := jpeg.Decode(fileCreate)
+				if !errors.Is(errdec, errEOF) {
+					resp, _ := http.Get(url)
+					fileCreate.Seek(0, io.SeekStart)
+					io.Copy(fileCreate, resp.Body)
+				}
+				_ = loadImage
+
+				response.Body.Close()
+				fileCreate.Close()
+			}(path2.ID, path2.Image, cacheDir)
+		}
+	}
+}
+
 const times string = "2006-01-02"
 const url string = "https://rickandmortyapi.com/api/character/?page="
 
@@ -99,11 +213,14 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	var (
-		//url    string     = "https://rickandmortyapi.com/api/character/?page="
-		result *[]JsonRaM = new([]JsonRaM)
+		/*result *[]JsonRaM = new([]JsonRaM)*/
+		result      = new(JsonRaMInfo)
+		cacheDir, _ = os.UserCacheDir()
 	)
+	result.ImportData(url)
+	result.DownloadImageCharacter()
 
-	RequestData(url, result)
+	//RequestData(url, result)
 
 	uniqueelemstruct := struct { //анонимная структура с уникальными полями, для полей выбора сортировки
 		//ID []int
@@ -115,32 +232,32 @@ func main() {
 		OriginName   []string
 		LocationName []string
 	}{
-		Name:         UniqueData(result, "Name"),
-		Status:       UniqueData(result, "Status"),
-		Species:      UniqueData(result, "Species"),
-		Type:         UniqueData(result, "Type"),
-		Gender:       UniqueData(result, "Gender"),
-		OriginName:   UniqueData(result, "Origin"),
-		LocationName: UniqueData(result, "Location"),
+		Name:         UniqueData(*result, "Name"),
+		Status:       UniqueData(*result, "Status"),
+		Species:      UniqueData(*result, "Species"),
+		Type:         UniqueData(*result, "Type"),
+		Gender:       UniqueData(*result, "Gender"),
+		OriginName:   UniqueData(*result, "Origin"),
+		LocationName: UniqueData(*result, "Location"),
 	}
 
 	_ = uniqueelemstruct
 
-	test := PersonID(result)
+	test := PersonID(*result)
 
 	a := app.New()
 	w := a.NewWindow("Rick And Morty")
 	w.Resize(fyne.NewSize(1000, 900))
 
 	file_item1 := fyne.NewMenuItem("Обновить", func() {
-		RequestData(url, result)
+		result.ImportData(url)
 	})
 	menu1 := fyne.NewMenu("Файл", file_item1)
 	main_menu := fyne.NewMainMenu(menu1)
 	w.SetMainMenu(main_menu)
 
 	// =============== Поле карточки персонажа ================//
-	image := canvas.NewImageFromFile("./img/1.jpeg")
+	image := canvas.NewImageFromFile(fmt.Sprintf("%v/RaMImg/1.jpeg", cacheDir))
 	image.Resize(fyne.Size{Height: 250, Width: 250})
 
 	labelNameField := widget.NewLabel("Имя:")
@@ -170,7 +287,7 @@ func main() {
 			return widget.NewLabel("")
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(test[i].Name)
+			o.(*widget.Label).SetText(fmt.Sprintf("ID: %v, Name: %v", i+1, test[i].Name))
 		})
 
 	var contN *fyne.Container
@@ -180,7 +297,7 @@ func main() {
 	rr2 := container.NewVBox(rr, tableCard)
 
 	listID.OnSelected = func(id widget.ListItemID) {
-		img := canvas.NewImageFromFile(fmt.Sprintf("./img/%v.jpeg", id+1))
+		img := canvas.NewImageFromFile(fmt.Sprintf("%v/RaMImg/%v.jpeg", cacheDir, id+1))
 		img.FillMode = canvas.ImageFillOriginal
 		//img.Resize(fyne.Size{Height: 250, Width: 250})
 		//img.Move(fyne.NewPos(250, 250))
@@ -205,71 +322,12 @@ func main() {
 
 }
 
-func RequestData(url string, datajson *[]JsonRaM) {
-	var (
-		rr JsonRaM
-	)
-	respT, err := http.Get(fmt.Sprintf("%v1", url))
-	if err != nil {
-		fmt.Errorf("Произошла ошибка: %v", err)
-	}
-	defer respT.Body.Close()
-	body, err := io.ReadAll(respT.Body) // возвращает []byte
-
-	//fmt.Println(strings.Index(string(body), "[")) // находим индекс символа ""
-
-	//newstr = body[strings.Index(string(body), "[") : strings.Index(string(body), "]")+1] //для массива нужно включать в строку "[" и "]"
-
-	//fmt.Println(string(body))
-
-	if err := json.Unmarshal(body, &rr); err != nil { // Parse []byte to the go struct pointer
-		fmt.Println(err)
-	}
-
-	*datajson = append((*datajson), rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
-
-	for _, val := range *datajson {
-		for _, val2 := range val.Results {
-			fmt.Println(val2.ID, val2.Image)
-			go DownloadImage(val2.ID, val2.Image)
-		}
-	}
-
-	fmt.Println((*datajson)[0].Info.Pages) //сначала разыменовываем указатель, а после обращаемся по индексу
-
-	if (*datajson)[0].Info.Pages > 1 {
-		for i := 2; i <= (*datajson)[0].Info.Pages; i++ {
-			var (
-				rr JsonRaM
-			)
-			response, err := http.Get(fmt.Sprintf("%v%d", url, i))
-			if err != nil {
-				return
-			}
-			defer response.Body.Close()
-
-			body, err := io.ReadAll(response.Body)
-			if err := json.Unmarshal(body, &rr); err != nil {
-				fmt.Println(err)
-			}
-			(*datajson) = append((*datajson), rr)
-
-			for _, val2 := range (*datajson)[i-1].Results {
-				//fmt.Println(val2.ID, val2.Image)
-				go DownloadImage(val2.ID, val2.Image)
-			}
-		}
-	}
-}
-
 func DownloadImage(id int, url string) {
 	_, err := os.Stat(fmt.Sprintf("./img/%v.jpeg", id))
 	if err == nil {
-		fmt.Println("File exists")
+		//fmt.Println("File exists")
 		return
 	}
-
-	fmt.Println(id, " | ", url)
 	resp, _ := http.Get(url)
 
 	defer resp.Body.Close()
@@ -279,14 +337,24 @@ func DownloadImage(id int, url string) {
 		fmt.Println("Ошибка создания файла!")
 	}
 	io.Copy(filecrt, resp.Body)
+	filecrt.Write([]byte{1, 4})
 	defer filecrt.Close()
-	fmt.Println("Завершение создания файла")
+
+	errEOF := errors.New("unexpected EOF")
+	loadImage, errdec := jpeg.Decode(filecrt)
+	if !errors.Is(errdec, errEOF) {
+		resp, _ := http.Get(url)
+		filecrt.Seek(0, io.SeekStart)
+		io.Copy(filecrt, resp.Body)
+	}
+	_ = loadImage
+	//fmt.Println("Завершение создания файла")
 }
 
-func UniqueData(data *[]JsonRaM, sort string) []string {
+func UniqueData(data JsonRaMInfo, sort string) []string {
 	//fmt.Println(sort)
 	sort = strings.ToLower(sort)
-	fmt.Println("UniqueCategoryData")
+	//fmt.Println("UniqueCategoryData")
 	var (
 		arrdata    = make([]string, 0)
 		uniquedata = make([]string, 0)
@@ -295,12 +363,12 @@ func UniqueData(data *[]JsonRaM, sort string) []string {
 	)
 	//fmt.Println((*data)[0].Results[0].Name)
 
-	for _, vl := range (*data)[0].Results {
+	for _, vl := range data[0].Results {
 		//nametable = append(nametable, string(vl)) //дописать
 		fmt.Sprint(vl)
 	}
 
-	for _, val := range *data {
+	for _, val := range data {
 		for _, valn := range val.Results {
 			switch sort {
 			case "name":
@@ -341,12 +409,12 @@ Loop:
 	return uniquedata
 }
 
-func PersonID(data *[]JsonRaM) []PersonUni {
+func PersonID(data JsonRaMInfo) []PersonUni {
 	var (
 		temp = make([]PersonUni, 0)
 	)
 
-	for _, val := range *data {
+	for _, val := range data {
 		for _, val2 := range val.Results {
 			var dt PersonUni = PersonUni{
 				ID:       val2.ID,
