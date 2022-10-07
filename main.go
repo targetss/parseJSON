@@ -148,7 +148,7 @@ func (p *JsonRaMInfo) ImportData(url string) {
 	if errbt != nil {
 		log.Println("Ошибка записи в файл json")
 	}
-	log.Println(fmt.Sprintf("Записано байт:%v\tБайт считано:%v", countbt, len(*p)))
+	log.Println(fmt.Sprintf("Записано байт: %v\n", countbt))
 	filewrite.Close()
 }
 
