@@ -113,7 +113,10 @@ func (p *JsonRaMInfo) ImportData(url string) {
 	bytefile, _ := os.ReadFile(pathCfg)
 	if len(bytefile) != 0 {
 		var tempJson []JsonRaM
-		json.Unmarshal([]byte(bytefile), &tempJson)
+		err := json.Unmarshal([]byte(bytefile), &tempJson)
+		if err != nil {
+			log.Println("Ошибка Unmarshall из файла json")
+		}
 		if tempJson[0].Info.Count == rr.Info.Count {
 			fmt.Println("Считывание данных с файла конфигурации Json..")
 			*p = tempJson
@@ -148,78 +151,65 @@ func (p *JsonRaMInfo) ImportData(url string) {
 	if errbt != nil {
 		log.Println("Ошибка записи в файл json")
 	}
-	log.Println(fmt.Sprintf("Записано байт: %v\n", countbt))
-	filewrite.Close()
+	log.Println(fmt.Sprintf("Записано байт: %v, считано байт: %v \n", countbt, len(bt)))
+	defer filewrite.Close()
 }
 
-func (p *JsonRaMInfo) AddDataInFile() bool {
-	cacheDir, _ := os.UserCacheDir()
-	os.Mkdir(filepath.Join(cacheDir, "ConfigRaM"), 0755)
-	if _, fifeinfo := os.Stat(filepath.Join(cacheDir, "ConfigRaM", "JsonInfo.dat")); os.IsExist(fifeinfo) {
-		return false
-	}
-	fl, _ := os.Create(filepath.Join(cacheDir, "ConfigRaM", "JsonInfo.dat"))
+func (p *JsonRaMInfo) UpdateJsonInFile(path string) {
 
-	//file, erropen := os.Open(filepath.Join(cacheDir, "ConfigRaM", "JsonInfo.dat"))
-	//if erropen != nil {
-	//	log.Println(erropen)
-	//}
-	//bt := make([]byte, len(*p))
-	bt, rtr := json.Marshal(*p)
-	fmt.Println(string(bt))
-	if rtr != nil {
-		log.Println("Ошибка Marshal json")
-	}
-	fl.Write(bt)
-	fl.Close()
-	return true
 }
 
 func (p *JsonRaMInfo) DownloadImageCharacter() {
-	cacheDir, _ := os.UserCacheDir()
-	fullpath := filepath.Join(cacheDir, "RaMImg") //join для того, чтобы корректно расставить разделители как в вашей ОС
-	os.Mkdir(fullpath, 0755)
+	//cacheDir, _ := os.UserCacheDir()
+	fullpath := filepath.Join(pathConfig, nameDirImg) //join для того, чтобы корректно расставить разделители как в вашей ОС
+	if err := os.Chdir(fullpath); err != nil {
+		os.Mkdir(fullpath, 0755)
+	}
 	for ind, _ := range *p {
-		for _, path2 := range (*p)[ind].Results {
-			go func(id int, url, path string) {
-				if _, errfile := os.Stat(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", id))); os.IsExist(errfile) {
-					log.Printf("Файл с именем %v.jped существует\n", id)
-					return
+	Next:
+		for _, val := range (*p)[ind].Results {
+			if _, err := os.Stat(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", val.ID))); err == nil {
+				if ff, err := os.Open(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", val.ID))); err == nil {
+					_, errimg := jpeg.Decode(ff)
+					if errimg == nil {
+						log.Printf("Файл с именем %v.jpeg существует\n", val.ID)
+						continue Next
+					}
+					ff.Close()
 				}
+			}
 
-				//time.Sleep(100 * time.Millisecond) //срабатывает защита от ддос атак
-				//fmt.Println("Gorutine go id:", id, "URL: ", url)
-				response, err := http.Get(url)
-				if err != nil {
-					log.Print(err)
-				}
-				if response.StatusCode == 429 {
-					//fmt.Println("Response code = 429, ID=", id, "\n", "Status=", response.Status, "\nStatusCode=", response.StatusCode)
-					response.Body.Close()
-					time.Sleep(8 * time.Second)
-
-					response, _ := http.Get(url)
-					fileCreate, _ := os.Create(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", id)))
-					io.Copy(fileCreate, response.Body)
-					fileCreate.Close()
-					response.Body.Close()
-					return
-				}
-				fileCreate, err := os.Create(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", id)))
-				io.Copy(fileCreate, response.Body)
-
-				errEOF := errors.New("unexpected EOF")
-				loadImage, errdec := jpeg.Decode(fileCreate)
-				if !errors.Is(errdec, errEOF) {
-					resp, _ := http.Get(url)
-					fileCreate.Seek(0, 0)
-					io.Copy(fileCreate, resp.Body)
-				}
-				_ = loadImage
-
+			//time.Sleep(100 * time.Millisecond) //срабатывает защита от ддос атак
+			response, err := http.Get(val.Image)
+			if err != nil {
+				log.Print(err)
+			}
+			if response.StatusCode == 429 {
+				//fmt.Println("Response code = 429, ID=", val.ID, "\n", "Status=", response.Status, "\nStatusCode=", response.StatusCode)
 				response.Body.Close()
+				time.Sleep(8 * time.Second)
+
+				response, _ := http.Get(val.Image)
+				fileCreate, _ := os.Create(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", val.ID)))
+				io.Copy(fileCreate, response.Body)
 				fileCreate.Close()
-			}(path2.ID, path2.Image, cacheDir)
+				response.Body.Close()
+				return
+			}
+			fileCreate, err := os.Create(filepath.Join(fullpath, fmt.Sprintf("%v.jpeg", val.ID)))
+			io.Copy(fileCreate, response.Body)
+
+			errEOF := errors.New("unexpected EOF")
+			loadImage, errdec := jpeg.Decode(fileCreate)
+			if !errors.Is(errdec, errEOF) {
+				resp, _ := http.Get(val.Image)
+				fileCreate.Seek(0, 0)
+				io.Copy(fileCreate, resp.Body)
+			}
+			_ = loadImage
+
+			response.Body.Close()
+			fileCreate.Close()
 		}
 	}
 }
@@ -232,8 +222,10 @@ const (
 var (
 	userCachePath, _        = os.UserCacheDir()
 	nameDirCache     string = "RaM"
+	nameDirImg       string = "RaM_IMG"
 	pathConfig              = filepath.Join(userCachePath, nameDirCache)
 	fileNameCache    string = "JsonData.dat"
+	fileNameLog      string = "RaM.log"
 )
 
 type CardLayout struct {
@@ -266,8 +258,8 @@ func main() {
 
 	var (
 		/*result *[]JsonRaM = new([]JsonRaM)*/
-		result      = new(JsonRaMInfo)
-		cacheDir, _ = os.UserCacheDir()
+		result = new(JsonRaMInfo)
+		//cacheDir, _ = os.UserCacheDir()
 	)
 	result.ImportData(url)
 	//_ = result.AddDataInFile()
@@ -310,7 +302,7 @@ func main() {
 	w.SetMainMenu(main_menu)
 
 	// =============== Поле карточки персонажа ================//
-	image := canvas.NewImageFromFile(fmt.Sprintf("%v\\RaMImg\\1.jpeg", cacheDir))
+	image := canvas.NewImageFromFile(filepath.Join(pathConfig, nameDirImg, "1.jpeg"))
 	image.Resize(fyne.Size{Height: 250, Width: 250})
 
 	labelNameField := widget.NewLabel("Имя:")
@@ -350,7 +342,7 @@ func main() {
 	rr2 := container.NewVBox(rr, tableCard)
 
 	listID.OnSelected = func(id widget.ListItemID) {
-		img := canvas.NewImageFromFile(fmt.Sprintf("%v\\RaMImg\\%v.jpeg", cacheDir, id+1))
+		img := canvas.NewImageFromFile(filepath.Join(pathConfig, nameDirImg, fmt.Sprintf("%v.jpeg", id+1)))
 		img.FillMode = canvas.ImageFillOriginal
 		//img.Resize(fyne.Size{Height: 250, Width: 250})
 		//img.Move(fyne.NewPos(250, 250))
@@ -373,35 +365,6 @@ func main() {
 	w.SetContent(container.NewHSplit(listID, rr2))
 	w.ShowAndRun()
 
-}
-
-func DownloadImage(id int, url string) {
-	_, err := os.Stat(fmt.Sprintf("./img/%v.jpeg", id))
-	if err == nil {
-		//fmt.Println("File exists")
-		return
-	}
-	resp, _ := http.Get(url)
-
-	defer resp.Body.Close()
-
-	filecrt, err := os.Create(fmt.Sprintf("./img/%v.jpeg", id))
-	if err != nil {
-		fmt.Println("Ошибка создания файла!")
-	}
-	io.Copy(filecrt, resp.Body)
-	filecrt.Write([]byte{1, 4})
-	defer filecrt.Close()
-
-	errEOF := errors.New("unexpected EOF")
-	loadImage, errdec := jpeg.Decode(filecrt)
-	if !errors.Is(errdec, errEOF) {
-		resp, _ := http.Get(url)
-		filecrt.Seek(0, io.SeekStart)
-		io.Copy(filecrt, resp.Body)
-	}
-	_ = loadImage
-	//fmt.Println("Завершение создания файла")
 }
 
 func UniqueData(data JsonRaMInfo, sort string) []string {
