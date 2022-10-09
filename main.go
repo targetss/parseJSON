@@ -112,6 +112,7 @@ func (p *JsonRaMInfo) GetData(f io.Writer) {
 	bt, _ := json.Marshal(*p)
 	//fmt.Println(f.Name())
 	countbt, errbt := f.Write(bt)
+	fmt.Println(errbt)
 	if errbt != nil {
 		log.Println("Ошибка записи в файл json: ", err)
 	}
@@ -132,9 +133,9 @@ func (p *JsonRaMInfo) ImportData(f *os.File) {
 	if err != nil || count != int(size.Size()) {
 		log.Println(fmt.Sprintf("Ошибка чтения байт из файла JSON, прочитано: %v, считано из информации файла: %v", count, size))
 	}
-
-	json.Unmarshal(dataByte, *p)
-
+	var tempJson []JsonRaM
+	json.Unmarshal([]byte(dataByte), &tempJson)
+	*p = tempJson
 }
 
 func (p *JsonRaMInfo) UpdateJsonInFile(path string) {
@@ -377,12 +378,9 @@ func CreateDirectoryConfig(p *JsonRaMInfo) {
 		os.Create(fileConfigJson)
 	}
 
-	fileInfoJson, err := os.Stat(fileConfigJson)
-	if err != nil {
-		os.Create(fileConfigJson)
-	}
+	fileInfoJson, _ := os.Stat(fileConfigJson)
 
-	file, _ := os.Open(fileConfigJson)
+	file, _ := os.OpenFile(fileConfigJson, os.O_RDWR, 0755)
 	fmt.Println("Размер файла JSON:", fileInfoJson.Size())
 	switch fileInfoJson.Size() {
 	case 0:
