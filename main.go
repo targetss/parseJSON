@@ -73,55 +73,19 @@ type PersonUni struct {
 
 type JsonRaMInfo []JsonRaM
 
-func (p *JsonRaMInfo) ImportData(url string) {
-	if len(*p) > 0 {
-		p = new(JsonRaMInfo)
-	}
-
+func (p *JsonRaMInfo) GetData(f io.Writer) {
 	var (
 		rr JsonRaM
 	)
 	respT, err := http.Get(fmt.Sprintf("%v1", url))
 	if err != nil {
-		fmt.Errorf("Произошла ошибка: %v", err)
+		log.Println(err, "- Ошибка Get запроса")
 	}
 	defer respT.Body.Close()
 	body, err := io.ReadAll(respT.Body) // возвращает []byte
 
 	if err := json.Unmarshal(body, &rr); err != nil {
 		fmt.Println(err)
-	}
-
-	pathCfg := filepath.Join(pathConfig, fileNameCache) //Полный путь до файла
-	errchdir := os.Chdir(pathConfig)                    //изменяет текущий рабочий каталог на именованный каталог
-	if errchdir != nil {
-		err := os.Mkdir(pathConfig, 0755)
-		if err == nil {
-			log.Println("Создание директории для конфигурационных файлов")
-		}
-		_, errfle := os.Create(pathCfg)
-		if errfle != nil {
-			panic(fmt.Sprintf("Ошибка создания файла данный Json, ошибка: %v", err))
-		}
-	} else {
-		if _, err := os.Stat(pathCfg); os.IsNotExist(err) {
-			log.Println("Создание файла конфигурации")
-			os.Create(pathCfg)
-		}
-	}
-
-	bytefile, _ := os.ReadFile(pathCfg)
-	if len(bytefile) != 0 {
-		var tempJson []JsonRaM
-		err := json.Unmarshal([]byte(bytefile), &tempJson)
-		if err != nil {
-			log.Println("Ошибка Unmarshall из файла json")
-		}
-		if tempJson[0].Info.Count == rr.Info.Count {
-			fmt.Println("Считывание данных с файла конфигурации Json..")
-			*p = tempJson
-			return
-		}
 	}
 
 	*p = append(*p, rr) // записываем в массив структур данные первой страницы, отсюда вычисляем общее кол-во страниц
@@ -145,14 +109,32 @@ func (p *JsonRaMInfo) ImportData(url string) {
 		}
 	}
 
-	filewrite, err := os.Create(pathCfg)
 	bt, _ := json.Marshal(*p)
-	countbt, errbt := filewrite.Write(bt)
+	//fmt.Println(f.Name())
+	countbt, errbt := f.Write(bt)
 	if errbt != nil {
-		log.Println("Ошибка записи в файл json")
+		log.Println("Ошибка записи в файл json: ", err)
 	}
 	log.Println(fmt.Sprintf("Записано байт: %v, считано байт: %v \n", countbt, len(bt)))
-	defer filewrite.Close()
+	//defer f.Close()
+}
+
+func (p *JsonRaMInfo) ImportData(f *os.File) {
+	if len(*p) > 0 {
+		p = new(JsonRaMInfo)
+	}
+
+	defer f.Close()
+
+	size, _ := f.Stat()
+	dataByte := make([]byte, size.Size())
+	count, err := f.Read(dataByte)
+	if err != nil || count != int(size.Size()) {
+		log.Println(fmt.Sprintf("Ошибка чтения байт из файла JSON, прочитано: %v, считано из информации файла: %v", count, size))
+	}
+
+	json.Unmarshal(dataByte, *p)
+
 }
 
 func (p *JsonRaMInfo) UpdateJsonInFile(path string) {
@@ -261,7 +243,10 @@ func main() {
 		result = new(JsonRaMInfo)
 		//cacheDir, _ = os.UserCacheDir()
 	)
-	result.ImportData(url)
+
+	CreateDirectoryConfig(result)
+
+	//result.ImportData(url)
 	//_ = result.AddDataInFile()
 	result.DownloadImageCharacter()
 
@@ -295,7 +280,7 @@ func main() {
 	w.Resize(fyne.NewSize(1000, 900))
 
 	file_item1 := fyne.NewMenuItem("Обновить", func() {
-		result.ImportData(url)
+		//result.ImportData(url)
 	})
 	menu1 := fyne.NewMenu("Файл", file_item1)
 	main_menu := fyne.NewMainMenu(menu1)
@@ -364,6 +349,49 @@ func main() {
 	//l := container.New(layout.NewGridLayout(3), listStatus, listSpecies, img)
 	w.SetContent(container.NewHSplit(listID, rr2))
 	w.ShowAndRun()
+
+}
+
+func CreateDirectoryConfig(p *JsonRaMInfo) {
+	cacheDir, _ := os.UserCacheDir()
+	var (
+		pathConfig     string = filepath.Join(cacheDir, "RaM")
+		fileConfigJson string = filepath.Join(pathConfig, "JsonData.dat")
+		imageDir       string = "Image"
+	)
+	if err := os.Chdir(pathConfig); err != nil {
+		os.Mkdir(pathConfig, 0755)
+		log.Println("Создание директории конфигурационных файлов")
+		_, err := os.Create(fileConfigJson)
+		if err != nil {
+			log.Println(err, "- Создание файла конфигурации JSON")
+		}
+	}
+
+	if err := os.Chdir(filepath.Join(pathConfig, imageDir)); err != nil {
+		os.Mkdir(filepath.Join(pathConfig, imageDir), 0755)
+		log.Println("Создание директории изображений")
+	}
+
+	if _, err := os.Stat(fileConfigJson); err != nil {
+		os.Create(fileConfigJson)
+	}
+
+	fileInfoJson, err := os.Stat(fileConfigJson)
+	if err != nil {
+		os.Create(fileConfigJson)
+	}
+
+	file, _ := os.Open(fileConfigJson)
+	fmt.Println("Размер файла JSON:", fileInfoJson.Size())
+	switch fileInfoJson.Size() {
+	case 0:
+		fmt.Println("case 0")
+		p.GetData(file)
+	default:
+		fmt.Println("default")
+		p.ImportData(file)
+	}
 
 }
 
